@@ -1,11 +1,19 @@
 from azure.storage.blob import BlobServiceClient, ContentSettings, generate_blob_sas
 from datetime import datetime, timedelta
+import logging
 
 def upsertMetadata(connectionString, container, fileName, metadata):
-    blobClient = BlobServiceClient.from_connection_string(connectionString).get_blob_client(container=container, blob=fileName)
-    blob_metadata = blobClient.get_blob_properties().metadata
-    blob_metadata.update(metadata)
-    blobClient.set_blob_metadata(metadata= blob_metadata)
+    try:
+        blobServiceClient = BlobServiceClient.from_connection_string(connectionString)
+        containerClient = blobServiceClient.get_container_client(container)
+        blobClient = containerClient.get_blob_client(fileName)
+        blobMetadata = blobClient.get_blob_properties().metadata
+        blobMetadata.update(metadata)
+        logging.info("Upserting metadata for file: " + fileName + " Metadata: " + str(blobMetadata))
+        blobClient.set_blob_metadata(metadata=blobMetadata)
+    except Exception as e:
+        logging.info("Error upserting metadata for file: " + fileName + " Error: " + str(e))
+        pass
 
 def getBlob(connectionString, container, fileName):
     blobServiceClient = BlobServiceClient.from_connection_string(connectionString)
@@ -34,7 +42,20 @@ def getSasToken(connectionString, container, fileName):
        account_key=blobClient.credential.account_key,  permission="r", expiry=datetime.utcnow() + timedelta(hours=3)
     )
     return sasToken
-    
+
+def copyS3Blob(downloadPath, blobName, openAiBlobConnectionString, openAiBlobContainer):
+    with open(downloadPath, "wb") as file:
+        readBytes = file.read()
+    blobServiceClient = BlobServiceClient.from_connection_string(openAiBlobConnectionString)
+    blobClient = blobServiceClient.get_blob_client(container=openAiBlobContainer, blob=blobName)
+    blobClient.upload_blob(readBytes,overwrite=True)
+
+def copyBlob(blobConnectionString, blobContainer, blobName, openAiBlobConnectionString, openAiBlobContainer):
+    readBytes  = getBlob(blobConnectionString, blobContainer, blobName)
+    blobServiceClient = BlobServiceClient.from_connection_string(openAiBlobConnectionString)
+    blobClient = blobServiceClient.get_blob_client(container=openAiBlobContainer, blob=blobName)
+    blobClient.upload_blob(readBytes,overwrite=True)
+
 def uploadBlob(connectionString, container, fileName, fileContent, contentType):
     blobServiceClient = BlobServiceClient.from_connection_string(connectionString)
     blobClient = blobServiceClient.get_blob_client(container=container, blob=fileName)

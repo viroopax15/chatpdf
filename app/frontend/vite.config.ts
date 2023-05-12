@@ -20,8 +20,10 @@ export default defineConfig({
         proxy: {
             "/ask": "http://127.0.0.1:5000",
             "/askAgent": "http://127.0.0.1:5000",
+            "/askTaskAgent": "http://127.0.0.1:5000",
             "/chat": "http://127.0.0.1:5000",
             "/chat3": "http://127.0.0.1:5000",
+            "/indexManagement": "http://127.0.0.1:5000",
             "/processDoc": "http://127.0.0.1:5000",
             "/refreshIndex": "http://127.0.0.1:5000",
             "/uploadFile": "http://127.0.0.1:5000",
@@ -33,7 +35,8 @@ export default defineConfig({
             "/speechToken": "http://127.0.0.1:5000",
             "/textAnalytics": "http://127.0.0.1:5000",
             "/summarizer": "http://127.0.0.1:5000",
-            "/speech": "http://127.0.0.1:5000"
+            "/speech": "http://127.0.0.1:5000",
+            "/verifyPassword": "http://127.0.0.1:5000"
         }
         // proxy: {
         //     "/ask": {

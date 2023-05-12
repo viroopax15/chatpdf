@@ -61,6 +61,23 @@ const ChatGpt = () => {
     const [summary, setSummary] = useState<string>();
     const [qa, setQa] = useState<string>('');
 
+    const [selectedEmbeddingItem, setSelectedEmbeddingItem] = useState<IDropdownOption>();
+
+    const embeddingOptions = [
+        {
+          key: 'azureopenai',
+          text: 'Azure Open AI'
+        },
+        {
+          key: 'openai',
+          text: 'Open AI'
+        }
+        // {
+        //   key: 'local',
+        //   text: 'Local Embedding'
+        // }
+    ]
+
     const makeApiRequest = async (question: string) => {
         lastQuestionRef.current = question;
 
@@ -83,15 +100,17 @@ const ChatGpt = () => {
                     semanticCaptions: useSemanticCaptions,
                     suggestFollowupQuestions: useSuggestFollowupQuestions,
                     tokenLength: tokenLength,
-                    autoSpeakAnswers: useAutoSpeakAnswers
+                    autoSpeakAnswers: useAutoSpeakAnswers,
+                    embeddingModelType: String(selectedEmbeddingItem?.key)
                 }
             };
             const result = await chatGptApi(request, String(selectedItem?.key), String(selectedIndex));
             //setAnswers([...answers, [question, result]]);
-            const speechUrl = await getSpeechApi(result.answer);
-            setAnswers([...answers, [question, result, speechUrl]]);
+            setAnswers([...answers, [question, result, null]]);
             if(useAutoSpeakAnswers){
-                startOrStopSynthesis(speechUrl, answers.length);
+                const speechUrl = await getSpeechApi(result.answer);
+                setAnswers([...answers, [question, result, speechUrl]]);
+                startOrStopSynthesis("gpt35", speechUrl, answers.length);
             }
         } catch (e) {
             setError(e);
@@ -122,15 +141,16 @@ const ChatGpt = () => {
                     semanticCaptions: useSemanticCaptions,
                     suggestFollowupQuestions: useSuggestFollowupQuestions,
                     tokenLength: tokenLength,
-                    autoSpeakAnswers: useAutoSpeakAnswers
+                    autoSpeakAnswers: useAutoSpeakAnswers,
+                    embeddingModelType: String(selectedEmbeddingItem?.key)
                 }
             };
             const result = await chatGpt3Api(question, request, String(selectedItem?.key), String(selectedIndex));
-            //setAnswers3([...answers3, [question, result]]);
-            const speechUrl = await getSpeechApi(result.answer);
-            setAnswers3([...answers3, [question, result, speechUrl]]);
+            setAnswers3([...answers3, [question, result, null]]);
             if(useAutoSpeakAnswers){
-                startOrStopSynthesis(speechUrl, answers.length);
+                const speechUrl = await getSpeechApi(result.answer);
+                setAnswers3([...answers3, [question, result, speechUrl]]);
+                startOrStopSynthesis("gpt3", speechUrl, answers.length);
             }
         } catch (e) {
             setError(e);
@@ -167,7 +187,7 @@ const ChatGpt = () => {
         makeApiRequest3(example);
     };
 
-    const startOrStopSynthesis = (url: string | null, index: number) => {
+    const startOrStopSynthesis = async (answerType:string, url: string | null, index: number) => {
         if(runningIndex === index) {
             audio.pause();
             setRunningIndex(-1);
@@ -180,15 +200,34 @@ const ChatGpt = () => {
         }
 
         if(url === null) {
-            return;
+            let speechAnswer;
+            if (answerType === 'gpt3') {
+                answers3.map((answer, index) => {
+                    speechAnswer = answer[1].answer
+                })    
+            } else if (answerType === 'gpt35') {
+                answers.map((answer, index) => {
+                    speechAnswer = answer[1].answer
+                })                
+            }
+            const speechUrl = await getSpeechApi(speechAnswer || '');
+            if (speechUrl === null) {
+                return;
+            }
+            audio = new Audio(speechUrl);
+            audio.play();
+            setRunningIndex(index);
+            audio.addEventListener('ended', () => {
+                setRunningIndex(-1);
+            });
+        } else {
+            audio = new Audio(url);
+            audio.play();
+            setRunningIndex(index);
+            audio.addEventListener('ended', () => {
+                setRunningIndex(-1);
+            });
         }
-
-        audio = new Audio(url);
-        audio.play();
-        setRunningIndex(index);
-        audio.addEventListener('ended', () => {
-            setRunningIndex(-1);
-        });
     };
 
     const refreshBlob = async () => {
@@ -281,6 +320,7 @@ const ChatGpt = () => {
     useEffect(() => {
         setOptions([])
         refreshBlob()
+        setSelectedEmbeddingItem(embeddingOptions[0])
     }, [])
 
     useEffect(() => chatMessageStreamEnd.current?.scrollIntoView({ behavior: "smooth" }), [isLoading]);
@@ -317,14 +357,21 @@ const ChatGpt = () => {
         setTokenLength(parseInt(newValue || "500"));
     };
 
-    const onShowCitation = (citation: string, index: number) => {
-        if (activeCitation === citation && activeAnalysisPanelTab === AnalysisPanelTabs.CitationTab && selectedAnswer === index) {
-            setActiveAnalysisPanelTab(undefined);
-        } else {
-            setActiveCitation(citation);
-            setActiveAnalysisPanelTab(AnalysisPanelTabs.CitationTab);
-        }
+    const onEmbeddingChange = (event?: React.FormEvent<HTMLDivElement>, item?: IDropdownOption): void => {
+        setSelectedEmbeddingItem(item);
+    };
 
+    const onShowCitation = (citation: string, index: number) => {
+        if (citation.indexOf('http') > -1 || citation.indexOf('https') > -1) {
+            window.open(citation.replace('/content/', ''), '_blank');
+        } else {
+            if (activeCitation === citation && activeAnalysisPanelTab === AnalysisPanelTabs.CitationTab && selectedAnswer === index) {
+                setActiveAnalysisPanelTab(undefined);
+            } else {
+                setActiveCitation(citation);
+                setActiveAnalysisPanelTab(AnalysisPanelTabs.CitationTab);
+            }
+        }
         setSelectedAnswer(index);
     };
 
@@ -393,7 +440,7 @@ const ChatGpt = () => {
                                                         onThoughtProcessClicked={() => onToggleTab(AnalysisPanelTabs.ThoughtProcessTab, index)}
                                                         onSupportingContentClicked={() => onToggleTab(AnalysisPanelTabs.SupportingContentTab, index)}
                                                         onFollowupQuestionClicked={q => makeApiRequest(q)}
-                                                        onSpeechSynthesisClicked={() => startOrStopSynthesis(answer[2], index)}
+                                                        onSpeechSynthesisClicked={() => startOrStopSynthesis("gpt35", answer[2], index)}
                                                         showFollowupQuestions={useSuggestFollowupQuestions && answers.length - 1 === index}
                                                     />
                                                 </div>
@@ -461,6 +508,19 @@ const ChatGpt = () => {
                                     />
                                     &nbsp;
                                     <Label className={styles.commandsContainer}>Index Type : {selectedIndex}</Label>
+                                </div>
+                                <br/>
+                                <div>
+                                    <Label>LLM Model</Label>
+                                    <Dropdown
+                                        selectedKey={selectedEmbeddingItem ? selectedEmbeddingItem.key : undefined}
+                                        onChange={onEmbeddingChange}
+                                        defaultSelectedKey="azureopenai"
+                                        placeholder="Select an LLM Model"
+                                        options={embeddingOptions}
+                                        disabled={false}
+                                        styles={dropdownStyles}
+                                    />
                                 </div>
                                 <TextField
                                     className={styles.chatSettingsSeparator}
@@ -580,7 +640,7 @@ const ChatGpt = () => {
                                                         onCitationClicked={c => onShowCitation(c, index)}
                                                         onThoughtProcessClicked={() => onToggleTab(AnalysisPanelTabs.ThoughtProcessTab, index)}
                                                         onSupportingContentClicked={() => onToggleTab(AnalysisPanelTabs.SupportingContentTab, index)}
-                                                        onSpeechSynthesisClicked={() => startOrStopSynthesis(answer[2], index)}
+                                                        onSpeechSynthesisClicked={() => startOrStopSynthesis("gpt3", answer[2], index)}
                                                         onFollowupQuestionClicked={q => makeApiRequest3(q)}
                                                         showFollowupQuestions={useSuggestFollowupQuestions && answers3.length - 1 === index}
                                                     />
@@ -649,6 +709,19 @@ const ChatGpt = () => {
                                     />
                                     &nbsp;
                                     <Label className={styles.commandsContainer}>Index Type : {selectedIndex}</Label>
+                                </div>
+                                <br/>
+                                <div>
+                                    <Label>LLM Model</Label>
+                                    <Dropdown
+                                        selectedKey={selectedEmbeddingItem ? selectedEmbeddingItem.key : undefined}
+                                        onChange={onEmbeddingChange}
+                                        defaultSelectedKey="azureopenai"
+                                        placeholder="Select an LLM Model"
+                                        options={embeddingOptions}
+                                        disabled={false}
+                                        styles={dropdownStyles}
+                                    />
                                 </div>
                                 <TextField
                                     className={styles.chatSettingsSeparator}

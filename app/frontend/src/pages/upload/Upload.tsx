@@ -14,7 +14,7 @@ import { Label } from '@fluentui/react/lib/Label';
 import { Stack, IStackStyles, IStackTokens, IStackItemStyles } from '@fluentui/react/lib/Stack';
 import { DefaultPalette } from '@fluentui/react/lib/Styling';
 import { TextField } from '@fluentui/react/lib/TextField';
-import { processDoc, uploadFile, uploadBinaryFile } from "../../api";
+import { processDoc, uploadFile, uploadBinaryFile, refreshIndex, verifyPassword } from "../../api";
 
 import styles from "./Upload.module.css";
 
@@ -35,10 +35,20 @@ const buttonStyles = makeStyles({
 const Upload = () => {
     const [files, setFiles] = useState<any>([])
     const [loading, setLoading] = useState(false)
-
+    const [selectedPdf, setSelectedPdf] = useState<IDropdownOption>();
+    const [optionsPdf, setOptionsPdf] = useState<any>([])
+    const [indexMapping, setIndexMapping] = useState<{ key: string; iType: string; name:string; indexName:string; embedded:boolean}[]>();
+    const [embedded, setEmbedded] = useState(false);
+    const [indexNs, setIndexNs] = useState('');
+    const [existingIndexName, setExistingIndexName] = useState('');
+    const [selectedIndex, setSelectedIndex] = useState<string>();
+      
     const [selectedItem, setSelectedItem] = useState<IDropdownOption>();
+    const [selectedEmbeddingItem, setSelectedEmbeddingItem] = useState<IDropdownOption>();
     const dropdownStyles: Partial<IDropdownStyles> = { dropdown: { width: 300 } };
     const [multipleDocs, setMultipleDocs] = useState(false);
+    const [existingIndex, setExistingIndex] = useState(false);
+
     const [indexName, setIndexName] = useState('');
     const [uploadText, setUploadText] = useState('');
     const [lastHeader, setLastHeader] = useState<{ props: IPivotItemProps } | undefined>(undefined);
@@ -57,6 +67,32 @@ const Upload = () => {
     const [s3AccessKey, setS3AccessKey] = useState('');
     const [s3SecretKey, setS3SecretKey] = useState('');
     const [s3Prefix, setS3Prefix] = useState('');
+
+    const [uploadPassword, setUploadPassword] = useState('');
+    const [missingUploadPassword, setMissingUploadPassword] = useState(false)
+    const [uploadError, setUploadError] = useState(false)
+
+    const [selectedTextSplitterItem, setSelectedTextSplitterItem] = useState<IDropdownOption>();
+
+    const textSplitterOptions = [
+      {
+        key: 'recursive',
+        text: 'Recursive Character Text Splitter'
+      },
+      {
+        key: 'tiktoken',
+        text: 'Tik Token'
+      },
+      {
+        key: 'nltk',
+        text: 'NLTK Text Splitter'
+      },
+      {
+        key: 'formrecognizer',
+        text: 'Form Recognizer'
+      }
+    ]
+
     const connectors = [
       { key: 's3file', text: 'Amazon S3 File'},
       { key: 's3Container', text: 'Amazon S3 Container'},
@@ -95,6 +131,21 @@ const Upload = () => {
       padding: 10,
     };
 
+    const embeddingOptions = [
+      {
+        key: 'azureopenai',
+        text: 'Azure Open AI'
+      },
+      {
+        key: 'openai',
+        text: 'Open AI'
+      }
+      // {
+      //   key: 'local',
+      //   text: 'Local Embedding'
+      // }
+    ]
+
     const options = [
       {
         key: 'pinecone',
@@ -103,11 +154,15 @@ const Upload = () => {
       {
         key: 'redis',
         text: 'Redis Stack'
-      }
-      ,{
+      },
+      {
         key: 'cogsearch',
         text: 'Cognitive Search'
       }
+      // {
+      //   key: 'chroma',
+      //   text: 'Chroma'
+      // }
       // ,
       // {
       //   key: 'weaviate',
@@ -124,8 +179,10 @@ const Upload = () => {
         },
         onDrop: acceptedFiles => {
           setFiles(acceptedFiles.map(file => Object.assign(file)))
+          setIndexName(acceptedFiles[0].name.split('.').slice(0, -1).join('.'));
         }
     })
+
     const renderFilePreview = (file: File ) => {
         if (file.type.startsWith('image')) {
           return <img width={38} height={38} alt={file.name} src={URL.createObjectURL(file)} />
@@ -134,6 +191,88 @@ const Upload = () => {
         }
     }
     
+    const refreshBlob = async (indexT: string) => {
+      const files = []
+      const indexType = []
+  
+      //const blobs = containerClient.listBlobsFlat(listOptions)
+      const blobs = await refreshIndex()       
+      for (const blob of blobs.values) {
+        // if (blob.embedded == "true")
+        // {
+          if (blob.indexType == indexT) {
+            files.push({
+              text: blob.indexName,
+              key: blob.namespace
+            })
+          }
+          indexType.push({
+                  key:blob.namespace,
+                  iType:blob.indexType,
+                  name:blob.name,
+                  indexName:blob.indexName,                  
+                  embedded: blob.embedded = (blob.embedded == "true")
+          })
+        //}
+      }
+      var uniqFiles = files.filter((v,i,a)=>a.findIndex(v2=>(v2.key===v.key))===i)
+      setOptionsPdf(uniqFiles)
+
+      const defaultKey = uniqFiles[0].key
+      setSelectedPdf(uniqFiles[0])
+
+      var uniqIndexType = indexType.filter((v,i,a)=>a.findIndex(v2=>(v2.key===v.key))===i)
+
+      for (const item of uniqIndexType) {
+          if (item.key == defaultKey) {
+              setSelectedIndex(item.iType)
+              setExistingIndexName(item.indexName)
+              if (existingIndex)
+                setIndexName(item.indexName)
+              setIndexNs(item.key)
+              setEmbedded(item.embedded)
+          }
+      }
+      if (!existingIndex) 
+        setIndexName('')
+      setIndexMapping(uniqIndexType)
+    }
+
+    const onChangePdf = (event?: React.FormEvent<HTMLDivElement>, item?: IDropdownOption): void => {
+      setSelectedPdf(item);
+      const defaultKey = item?.key
+      const defaultName = item?.text
+      if (defaultKey == undefined || defaultKey == '') {
+        indexMapping?.findIndex((item) => {
+          if (item.indexName == defaultName) {
+              setSelectedIndex(item.iType)
+              setExistingIndexName(item.indexName)
+              if (existingIndex)
+                setIndexName(item.indexName)
+              setIndexNs(item.key)
+              setEmbedded(item.embedded)
+          }
+        })
+        if (!existingIndex) 
+          setIndexName('')
+      }
+      else {
+        indexMapping?.findIndex((item) => {
+            if (item.key == defaultKey) {
+                setSelectedIndex(item.iType)
+                setExistingIndexName(item.indexName)
+                if (existingIndex)
+                  setIndexName(item.indexName)
+                setIndexNs(item.key)
+                setEmbedded(item.embedded)
+            }
+        })
+        if (!existingIndex) 
+          setIndexName('')
+      }
+    };
+
+
     const handleRemoveFile = (file: File ) => {
         const uploadedFiles = files
         //const filtered = uploadedFiles.filter(i => i.name !== file.name)
@@ -143,6 +282,7 @@ const Upload = () => {
 
     const handleRemoveAllFiles = () => {
         setFiles([])
+        setIndexName('')
     }
     const fileList = files.map((file:File) => (
         <div>
@@ -161,6 +301,11 @@ const Upload = () => {
     ))
     
     const handleUploadFiles = async () => {
+      if (uploadPassword == '') {
+        setMissingUploadPassword(true)
+        return
+      }
+
       if (files.length > 1) {
         setMultipleDocs(true)
         if (indexName == '') {
@@ -168,44 +313,71 @@ const Upload = () => {
           return
         }
       }
+
+      if (existingIndex && existingIndexName == '') {
+        setMissingIndexName(true)
+        return
+      }
+
       setLoading(true)
-      setUploadText('Uploading your document...')
-      let count = 0
-      await new Promise( (resolve) => {
-      files.forEach(async (element: File) => {
-        //await uploadFileToBlob(element)
-        try {
-          const formData = new FormData();
-          formData.append('file', element);
+      await verifyPassword("upload", uploadPassword)
+      .then(async (verifyResponse:string) => {
+        if (verifyResponse == "Success") {
+          setUploadText("Password verified")
+          setUploadText('Uploading your document...')
+          let count = 0
+          await new Promise( (resolve) => {
+          files.forEach(async (element: File) => {
+            //await uploadFileToBlob(element)
+            try {
+              const formData = new FormData();
+              formData.append('file', element);
+    
+              await uploadBinaryFile(formData, indexName)
+            }
+            finally
+            {
+              count += 1
+              if (count == files.length) {
+                resolve(element)
+              }
+            }
+          })
+          })
+          setUploadText("File uploaded successfully.  Now indexing the document.")
 
-          await uploadBinaryFile(formData)
-        }
-        finally
-        {
-          count += 1
-          if (count == files.length) {
-            resolve(element)
-          }
-        }
-      })
-      })
-      setUploadText("File uploaded successfully.  Now indexing the document.")
-
-      await processDoc(String(selectedItem?.key), "files", (files.length > 1 ? "true" : "false"), (files.length > 1 ? indexName : files[0].name), files,
-      blobConnectionString, blobContainer, blobPrefix, blobName,
-      s3Bucket, s3Key, s3AccessKey, s3SecretKey, s3Prefix)
-      .then((response:string) => {
-        if (response = "Success") {
-          setUploadText("Completed Successfully.  You can now search for your document.")
+          await processDoc(String(selectedItem?.key), "files", (files.length > 1 ? "true" : "false"), 
+          existingIndex ? existingIndexName : indexName, files,
+          blobConnectionString, blobContainer, blobPrefix, blobName,
+          s3Bucket, s3Key, s3AccessKey, s3SecretKey, s3Prefix,
+          existingIndex ? "true" : "false", existingIndex ? indexNs : '',
+          String(selectedEmbeddingItem?.key), String(selectedTextSplitterItem?.key))
+          .then((response:string) => {
+            if (response == "Success") {
+              setUploadText("Completed Successfully.  You can now search for your document.")
+            }
+            else {
+              setUploadText(response)
+            }
+            setFiles([])
+            setLoading(false)
+            setMissingIndexName(false)
+            setMultipleDocs(false)
+            setIndexName('')
+          })
+          .catch((error : string) => {
+            setUploadText(error)
+            setFiles([])
+            setLoading(false)
+            setMissingIndexName(false)
+            setMultipleDocs(false)
+            setIndexName('')
+          })
+          refreshBlob(String(selectedItem?.key))
         }
         else {
-          setUploadText("Failure to upload the document.")
+          setUploadText(verifyResponse)
         }
-        setFiles([])
-        setLoading(false)
-        setMissingIndexName(false)
-        setMultipleDocs(false)
-        setIndexName('')
       })
       .catch((error : string) => {
         setUploadText(error)
@@ -215,9 +387,20 @@ const Upload = () => {
         setMultipleDocs(false)
         setIndexName('')
       })
+      setLoading(false)
     }
 
     const onProcessWebPages = async () => {
+      if (uploadPassword == '') {
+        setMissingUploadPassword(true)
+        return
+      }
+
+      if (existingIndex && existingIndexName == '') {
+        setMissingIndexName(true)
+        return
+      }
+
       const processPage = parsedWebUrls.filter(function(e){return e})
       if (processPage?.length == 0) {
         setUploadText('Provide the list of URL to Process...')
@@ -230,42 +413,70 @@ const Upload = () => {
           return
         }
         setLoading(true)
-        setUploadText('Uploading your document...')
-        let count = 0
+        await verifyPassword("upload", uploadPassword)
+        .then(async (verifyResponse:string) => {
+          if (verifyResponse == "Success") {
+            setUploadText("Password verified")
 
-        const fileContentsAsString = "Will Process the Webpage and index it with IndexName as " + indexName + " and the URLs are " + processPage
-        await uploadFile(indexName + ".txt", fileContentsAsString, "text/plain")
-        .then(async () => {
-          setUploadText("File uploaded successfully.  Now indexing the document.")
-          await processDoc(String(selectedItem?.key), "webpages", "false", indexName, processPage, blobConnectionString,
-          blobContainer, blobPrefix, blobName, s3Bucket, s3Key, s3AccessKey,
-          s3SecretKey, s3Prefix)
-          .then((response) => {
-            if (response == "Success") {
-              setUploadText("Completed Successfully.  You can now search for your document.")
-            }
-            else {
-              setUploadText("Failure to upload the document.")
-            }
-            setWebPages('')
-            setParsedWebUrls([''])
-            setLoading(false)
-            setMissingIndexName(false)
-            setIndexName('')
-          })
-          .catch((error : string) => {
-            setUploadText(error)
-            setWebPages('')
-            setParsedWebUrls([''])
-            setLoading(false)
-            setMissingIndexName(false)
-            setIndexName('')
-          })
+            setUploadText('Uploading your document...')
+    
+            const fileContentsAsString = "Will Process the Webpage and index it with IndexName as " + indexName + " and the URLs are " + processPage
+            await uploadFile(indexName + ".txt", fileContentsAsString, "text/plain")
+            .then(async () => {
+              setUploadText("File uploaded successfully.  Now indexing the document.")
+              await processDoc(String(selectedItem?.key), "webpages", "false", existingIndex ? existingIndexName : indexName, 
+              processPage, blobConnectionString,
+              blobContainer, blobPrefix, blobName, s3Bucket, s3Key, s3AccessKey,
+              s3SecretKey, s3Prefix, existingIndex ? "true" : "false", existingIndex ? indexNs : '',
+              String(selectedEmbeddingItem?.key), String(selectedTextSplitterItem?.key))
+              .then((response) => {
+                if (response == "Success") {
+                  setUploadText("Completed Successfully.  You can now search for your document.")
+                }
+                else {
+                  setUploadText("Failure to upload the document.")
+                  setUploadError(true)
+                }
+                setWebPages('')
+                setParsedWebUrls([''])
+                setLoading(false)
+                setMissingIndexName(false)
+                setIndexName('')
+              })
+              .catch((error : string) => {
+                setUploadText(error)
+                setUploadError(true)
+                setWebPages('')
+                setParsedWebUrls([''])
+                setLoading(false)
+                setMissingIndexName(false)
+                setIndexName('')
+              })
+              refreshBlob(String(selectedItem?.key))
+            })
+          }
+          else {
+            setUploadText(verifyResponse)
+          }
         })
+        .catch((error : string) => {
+          setUploadText(error)
+          setUploadError(true)
+          setWebPages('')
+          setParsedWebUrls([''])
+          setLoading(false)
+          setMissingIndexName(false)
+          setIndexName('')
+        })
+        setLoading(false)
       }
     }
 
     const onProcessConnectors = async () => {
+      if (uploadPassword == '') {
+        setMissingUploadPassword(true)
+        return
+      }
       if (indexName == '') {
         setMissingIndexName(true)
         return
@@ -298,39 +509,73 @@ const Upload = () => {
         setMissingIndexName(true)
         return
       }
-      setLoading(true)
-      setUploadText('Uploading your document...')
-      let count = 0
 
-      const fileContentsAsString = "Will Process the connector document and index it with IndexName as " + indexName
-      await uploadFile(indexName + ".txt", fileContentsAsString, "text/plain")
-      .then(async () => {
-        setUploadText("File uploaded successfully.  Now indexing the document.")
-        setUploadText('Processing data from your connector...')
-        await processDoc(String(selectedItem?.key), String(selectedConnector?.key), "false", indexName, '', blobConnectionString,
-        blobContainer, blobPrefix, blobName, s3Bucket, s3Key, s3AccessKey,
-        s3SecretKey, s3Prefix )  
-        .then((response) => {
-          if (response == "Success") {
-            setUploadText("Completed Successfully.  You can now search for your document.")
+      if (existingIndex && existingIndexName == '') {
+        setMissingIndexName(true)
+        return
+      }
+
+      setLoading(true)
+      await verifyPassword("upload", uploadPassword)
+        .then(async (verifyResponse:string) => {
+          if (verifyResponse == "Success") {
+            setUploadText("Password verified")
+
+            setUploadText('Uploading your document...')
+      
+            const fileContentsAsString = "Will Process the connector document and index it with IndexName as " + indexName
+            await uploadFile(indexName + ".txt", fileContentsAsString, "text/plain")
+              .then(async () => {
+                setUploadText("File uploaded successfully.  Now indexing the document.")
+                setUploadText('Processing data from your connector...')
+                await processDoc(String(selectedItem?.key), String(selectedConnector?.key), "false", existingIndex ? existingIndexName : indexName,
+                '', blobConnectionString,
+                blobContainer, blobPrefix, blobName, s3Bucket, s3Key, s3AccessKey,
+                s3SecretKey, s3Prefix, existingIndex ? "true" : "false", existingIndex ? indexNs : '',
+                String(selectedEmbeddingItem?.key), String(selectedTextSplitterItem?.key))  
+                .then((response) => {
+                  if (response == "Success") {
+                    setUploadText("Completed Successfully.  You can now search for your document.")
+                  }
+                  else {
+                    setUploadText("Failure to upload the document.")
+                  }
+                  setLoading(false)
+                  setMissingIndexName(false)
+                  setIndexName('')
+                  setBlobConnectionString('')
+                  setBlobContainer('')
+                  setBlobPrefix('')
+                  setBlobName('')
+                  setS3Bucket('')
+                  setS3Key('')
+                  setS3AccessKey('')
+                  setS3SecretKey('')
+                  setS3Prefix('')
+                  })
+                .catch((error : string) => {
+                  setUploadText(error)
+                  setLoading(false)
+                  setMissingIndexName(false)
+                  setIndexName('')
+                  setBlobConnectionString('')
+                  setBlobContainer('')
+                  setBlobPrefix('')
+                  setBlobName('')
+                  setS3Bucket('')
+                  setS3Key('')
+                  setS3AccessKey('')
+                  setS3SecretKey('')
+                  setS3Prefix('')
+                })
+                refreshBlob(String(selectedItem?.key))
+              })
           }
           else {
-            setUploadText("Failure to upload the document.")
+            setUploadText(verifyResponse)
           }
-          setLoading(false)
-          setMissingIndexName(false)
-          setIndexName('')
-          setBlobConnectionString('')
-          setBlobContainer('')
-          setBlobPrefix('')
-          setBlobName('')
-          setS3Bucket('')
-          setS3Key('')
-          setS3AccessKey('')
-          setS3SecretKey('')
-          setS3Prefix('')
-          })
-        .catch((error : string) => {
+      })
+      .catch((error : string) => {
           setUploadText(error)
           setLoading(false)
           setMissingIndexName(false)
@@ -344,16 +589,30 @@ const Upload = () => {
           setS3AccessKey('')
           setS3SecretKey('')
           setS3Prefix('')
-        })
       })
+      setLoading(false)
     }
 
     const onMultipleDocs = (ev?: React.FormEvent<HTMLElement | HTMLInputElement>, checked?: boolean): void => {
         setMultipleDocs(!!checked);
     };
 
+    const onExistingIndex = (ev?: React.FormEvent<HTMLElement | HTMLInputElement>, checked?: boolean): void => {
+      setExistingIndex(!!checked);
+      checked ? setIndexName(selectedPdf ? selectedPdf.text as string : optionsPdf[0].text as string) : setIndexName('')
+    };
+
     const onChange = (event?: React.FormEvent<HTMLDivElement>, item?: IDropdownOption): void => {
       setSelectedItem(item);
+      refreshBlob(item?.key as string)
+    };
+
+    const onEmbeddingChange = (event?: React.FormEvent<HTMLDivElement>, item?: IDropdownOption): void => {
+      setSelectedEmbeddingItem(item);
+    };
+
+    const onTextSplitterChange = (event?: React.FormEvent<HTMLDivElement>, item?: IDropdownOption): void => {
+      setSelectedTextSplitterItem(item);
     };
 
     const onChangeIndexName = (event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string): void => {
@@ -380,6 +639,16 @@ const Upload = () => {
     
     const onBlobPrefix = (_ev?: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string) => {
       setBlobPrefix(newValue || "");
+    };
+
+    const onUploadPassword = (_ev?: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string) => {
+      setUploadPassword(newValue || "");
+      if (newValue == '') {
+        setMissingUploadPassword(true)
+      }
+      else {
+        setMissingUploadPassword(false)
+      }
     };
 
     const onBlobName = (_ev?: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string) => {
@@ -410,6 +679,9 @@ const Upload = () => {
       setSelectedItem(options[0])
       setConnectorOptions(connectors)
       setSelectedConnector(connectors[0])
+      refreshBlob(options[0].key as string)
+      setSelectedEmbeddingItem(embeddingOptions[0])
+      setSelectedTextSplitterItem(textSplitterOptions[0])
     }, [])
 
     return (
@@ -425,6 +697,47 @@ const Upload = () => {
                       defaultSelectedKey="pinecone"
                       placeholder="Select an Index Type"
                       options={options}
+                      disabled={false}
+                      styles={dropdownStyles}
+                  />
+                  &nbsp;
+                  <Label>Embedding Model</Label>
+                  &nbsp;
+                  <Dropdown
+                      selectedKey={selectedEmbeddingItem ? selectedEmbeddingItem.key : undefined}
+                      onChange={onEmbeddingChange}
+                      defaultSelectedKey="azureopenai"
+                      placeholder="Select an Embedding Model"
+                      options={embeddingOptions}
+                      disabled={false}
+                      styles={dropdownStyles}
+                  />
+                  &nbsp;
+                  <Label>Upload Password:</Label>&nbsp;
+                  <TextField onChange={onUploadPassword}
+                      errorMessage={!missingUploadPassword ? '' : "Note - Upload Password is required for Upload Functionality"}/>
+                  &nbsp;
+                  <Checkbox boxSide="end" label="Existing Index?" checked={existingIndex} onChange={onExistingIndex} />
+                  &nbsp;
+                  {existingIndex ? (
+                  <Dropdown
+                      selectedKey={selectedPdf ? selectedPdf.key : undefined}
+                      // eslint-disable-next-line react/jsx-no-bind
+                      onChange={onChangePdf}
+                      placeholder="Select an PDF"
+                      options={optionsPdf}
+                      styles={dropdownStyles}
+                  />) : (<></>)}
+                </Stack.Item>
+                <Stack.Item grow styles={stackItemStyles}>
+                <Label>Chunk Document using :</Label>
+                  &nbsp;
+                  <Dropdown
+                      selectedKey={selectedTextSplitterItem ? selectedTextSplitterItem.key : undefined}
+                      onChange={onTextSplitterChange}
+                      defaultSelectedKey="azureopenai"
+                      placeholder="Select text splitter"
+                      options={textSplitterOptions}
                       disabled={false}
                       styles={dropdownStyles}
                   />
@@ -444,9 +757,9 @@ const Upload = () => {
                       <Checkbox label="Multiple Documents" checked={multipleDocs} onChange={onMultipleDocs} />
                     </Stack.Item>
                     <Stack.Item grow={2} styles={stackItemStyles}>
-                      <TextField onChange={onChangeIndexName} disabled={!multipleDocs} 
+                      <TextField onChange={onChangeIndexName} value={indexName}
                           errorMessage={!missingIndexName ? '' : "Index name is required"}
-                          label="Index Name (for single file will default to filename)" />
+                          label="Index Name" />
                     </Stack.Item>
                   </Stack>
                 </Stack>
@@ -474,7 +787,7 @@ const Upload = () => {
                     {loading ? <div><span>Please wait, Uploading and Processing your file</span><Spinner/></div> : null}
                     <hr />
                     <h2 className={styles.chatEmptyStateSubtitle}>
-                      <TextField disabled={true} label={uploadText} />
+                      <TextField disabled={true} label={uploadError ? '' : uploadText} errorMessage={!uploadError ? '' : uploadText} />
                     </h2>
                 </div>
               </PivotItem>

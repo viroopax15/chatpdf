@@ -4,10 +4,20 @@ from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
 import os
 import logging
+from azure.search.documents.models import QueryType
 
 SearchService = os.environ['SearchService']
 SearchKey = os.environ['SearchKey']
 
+def deleteSearchIndex(indexName):
+    indexClient = SearchIndexClient(endpoint=f"https://{SearchService}.search.windows.net/",
+            credential=AzureKeyCredential(SearchKey))
+    if indexName in indexClient.list_index_names():
+        logging.info(f"Deleting {indexName} search index")
+        indexClient.delete_index(indexName)
+    else:
+        logging.info(f"Search index {indexName} does not exist")
+        
 def createSearchIndex(indexName):
     indexClient = SearchIndexClient(endpoint=f"https://{SearchService}.search.windows.net/",
             credential=AzureKeyCredential(SearchKey))
@@ -56,11 +66,19 @@ def createSections(fileName, docs):
 
 def indexSections(fileName, indexName, docs):
 
+    logging.info("Total docs: " + str(len(docs)))
     sections = createSections(fileName, docs)
     logging.info(f"Indexing sections from '{fileName}' into search index '{indexName}'")
     searchClient = SearchClient(endpoint=f"https://{SearchService}.search.windows.net/",
                                     index_name=indexName,
                                     credential=AzureKeyCredential(SearchKey))
+    
+    # batch = []
+    # for s in sections:
+    #     batch.append(s)
+    # results = searchClient.upload_documents(documents=batch)
+    # succeeded = sum([1 for r in results if r.succeeded])
+    # logging.info(f"\tIndexed {len(results)} sections, {succeeded} succeeded")
     i = 0
     batch = []
     for s in sections:
@@ -82,7 +100,15 @@ def performCogSearch(question, indexName, k):
         index_name=indexName,
         credential=AzureKeyCredential(SearchKey))
     try:
-        r = searchClient.search(question, filter=None, top=k)
+        #r = searchClient.search(question, filter=None, top=k)
+        r = searchClient.search(question, 
+                            filter=None,
+                            query_type=QueryType.SEMANTIC, 
+                            query_language="en-us", 
+                            query_speller="lexicon", 
+                            semantic_configuration_name="default", 
+                            top=k, 
+                            query_caption="extractive|highlight-false")
         return r
     except Exception as e:
         logging.info(e)

@@ -18,6 +18,13 @@ The repo provides a way to upload your own data so it's ready to try end to end.
 * 4/13/2023 - Add new feature to support asking questions on multiple document using [Vector QA Agent](https://python.langchain.com/en/latest/modules/agents/toolkits/examples/vectorstore.html)
 * 4/17/2023 - Real-time Speech Analytics and Speech to Text and Text to Speech for Chat & Ask Features. (You can configure Text to Speech feature from the Developer settings.  You will need Azure Speech Services)
 * 4/21/2023 - Add SQL Query & SQL Data tab to SQL NLP and fix Citations & Follow-up questions for Chat & Ask features
+* 4/25/2023 - Initial version of Power Virtual Agent
+* 4/28/2023 - Fix Bugs, Citations & Follow-up questions across QA & Chat.  Prompt bit more restrictive to limit responding from the document.
+* 4/29/2023 - AWS S3 Process Integration using S3, AWS Lambda Function and Azure Data Factory (automated deployment not available yet, scripts are available in /Deployment/aws folder)
+* 4/30/2023 - Initial version of Task Agent Feature added.  Autonomous Agents are agents that designed to be more long running. You give them one or multiple long term goals, and they independently execute towards those goals. The applications combine tool usage and long term memory.  Initial feature implements [Baby AGI](https://github.com/yoheinakajima/babyagi) with execution tools
+* 5/03/2023 - Password required for Upload and introduced Admin page starting with Index Management
+* 5/07/2023 - Option available to select either Azure OpenAI or OpenAI.  For OpenAI ensure you have `OpenAiApiKey` in Azure Functions settings.  For Azure OpenAI you will need `OpenAiKey`, `OpenAiService` and `OpenAiEndPoint` Endpoint settings.  You can also select that option for Chat/Question/SQL Nlp/Speech Analytics and other features (from developer settings page).
+* 5/10/2023 - Add the options on how document should be chunked.  If you want to use the Form Recognizer, ensure the Form recognizer resource is created and the appropriate application settings `FormRecognizerKey` and `FormRecognizerEndPoint` are configured.
   
 ## Test Website
 
@@ -51,4 +58,4 @@ The repo provides a way to upload your own data so it's ready to try end to end.
 
 ### Note
 
->Adapted from the Azure OpenAI Search repo at [OpenAI-CogSearch](https://github.com/Azure-Samples/azure-search-openai-demo/)
+>Adapted from the Azure OpenAI Search repo at [OpenAI-CogSearch](https://github.com/Azure-Samples/azure-search-openai-demo/) and [Call Center Analytics](https://github.com/amulchapla/AI-Powered-Call-Center-Intelligence)

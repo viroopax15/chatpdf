@@ -2,13 +2,19 @@
     "IsEncrypted": false,
     "Values": {
       "FUNCTIONS_WORKER_RUNTIME": "python",
+      "DOCGENERATOR_URL": "http://localhost:7071/api/DocGenerator?code=",
+      "AdminPassword": "", // Admin Password that is used for protected pages
+      "UploadPassword": "", // Upload Password that is used for uploading files
       "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+      "OpenAiApiKey": "",
       "OpenAiKey": "", // Open AI Key
       "OpenAiService": "", // Name of Open AI Service
       "OpenAiEndPoint": "", // FQDN of Open AI Service
       "OpenAiVersion": "2022-12-01",
       "OpenAiDavinci": "", // Deployment name of Davinci-003
       "OpenAiEmbedding": "", // Deployment name of Ada-003
+      "FormRecognizerEndPoint": "", // Form Recognizer Endpoint
+      "FormRecognizerKey": "",  // Form Recognizer Key
       "MaxTokens": 500, 
       "Temperature": 0.3,
       "OpenAiChat": "", // GPT 3.5 deployment name
@@ -18,6 +24,8 @@
       "RedisPassword": "Password", // Redis Password
       "RedisAddress": "http://localhost", // Redis URL
       "RedisPort": "6379",
+      "ChromaUrl": "", // Chroma URL
+      "ChromaPort": "8000",
       "OpenAiDocStorName": "", // Storage name
       "OpenAiDocStorKey": "", // Storage doc
       "OpenAiDocStorConnString": "", // Storage connection string
