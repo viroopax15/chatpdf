@@ -4,7 +4,7 @@ import { Checkbox, ChoiceGroup, IChoiceGroupOption, Panel, DefaultButton, Spinne
 import styles from "./OneShot.module.css";
 import { Dropdown, DropdownMenuItemType, IDropdownStyles, IDropdownOption } from '@fluentui/react/lib/Dropdown';
 
-import { askApi, askAgentApi, askTaskAgentApi, Approaches, AskResponse, AskRequest, refreshIndex, getSpeechApi } from "../../api";
+import { askApi, askAgentApi, askTaskAgentApi, Approaches, AskResponse, AskRequest, refreshIndex, getSpeechApi, summaryAndQa } from "../../api";
 import { Answer, AnswerError } from "../../components/Answer";
 import { QuestionInput } from "../../components/QuestionInput";
 import { AnalysisPanel, AnalysisPanelTabs } from "../../components/AnalysisPanel";
@@ -116,8 +116,8 @@ const OneShot = () => {
     const stackItemStyles: IStackItemStyles = {
     root: {
         alignItems: 'left',
-        background: DefaultPalette.white,
-        color: DefaultPalette.white,
+        // background: DefaultPalette.white,
+        // color: DefaultPalette.white,
         display: 'flex',
         justifyContent: 'left',
     },
@@ -466,7 +466,7 @@ const OneShot = () => {
                     key:blob.namespace,
                     iType:blob.indexType,
                     summary:blob.summary,
-                    qa:blob.qa
+                    qa:blob.qa == null ? '' : blob.qa
             })
           }
         }
@@ -500,6 +500,16 @@ const OneShot = () => {
             }
         }
         setIndexMapping(uniqIndexType)
+    }
+
+    const refreshSummary = async (requestType : string) => {
+        try {
+            const result = await summaryAndQa(String(selectedIndex), String(selectedItem?.key), String(selectedEmbeddingItem?.key), 
+            requestType, 'stuff');
+            refreshBlob();
+        } catch (e) {
+        } finally {
+        }
     }
 
     const onChange = (event?: React.FormEvent<HTMLDivElement>, item?: IDropdownOption): void => {
@@ -616,7 +626,6 @@ const OneShot = () => {
                                     <SettingsButton className={styles.settingsButton} onClick={() => setIsConfigPanelOpen(!isConfigPanelOpen)} />
                                     <div className={styles.settingsButton}>{selectedItem ? 
                                             "Document Name : "  + selectedItem.text : undefined}</div>
-
                                 </div>
                                 <h1 className={styles.oneshotTitle}>Ask your data</h1>
                                 <div className={styles.example}>
@@ -795,6 +804,9 @@ const OneShot = () => {
                                     label="Automatically speak answers"
                                     onChange={onEnableAutoSpeakAnswersChange}
                                 />
+                                <br/>
+                                <DefaultButton onClick={() => refreshSummary('summary')}>Regenerate Summary</DefaultButton>
+                                <DefaultButton onClick={() => refreshSummary('qa')}>Regenerate Qa</DefaultButton>
                             </Panel>
                     </PivotItem>
                     <PivotItem

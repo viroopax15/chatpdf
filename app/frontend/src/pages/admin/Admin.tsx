@@ -64,15 +64,15 @@ const Admin = () => {
     
     const stackStyles: IStackStyles = {
       root: {
-        background: DefaultPalette.white,
+        // background: DefaultPalette.white,
         height: 250,
       },
     };
     const stackItemStyles: IStackItemStyles = {
       root: {
         alignItems: 'left',
-        background: DefaultPalette.white,
-        color: DefaultPalette.white,
+        // background: DefaultPalette.white,
+        // color: DefaultPalette.white,
         display: 'flex',
         justifyContent: 'left',
       },
@@ -99,6 +99,10 @@ const Admin = () => {
       {
         key: 'cogsearch',
         text: 'Cognitive Search'
+      },
+      {
+        key: 'cogsearchvs',
+        text: 'Cognitive Search Vector Store'
       }
       // {
       //   key: 'chroma',
@@ -254,7 +258,7 @@ const Admin = () => {
                 <Stack.Item grow styles={stackItemStyles}>
                   <Label>Admin Password:</Label>&nbsp;
                   <TextField onChange={onAdminPassword}
-                      errorMessage={!missingAdminPassword ? '' : "Note - Upload Password is required for Upload Functionality"}/>
+                      errorMessage={!missingAdminPassword ? '' : "Note - Admin Password is required for Admin Functionality"}/>
                 </Stack.Item>
               </Stack>
             </Stack>
